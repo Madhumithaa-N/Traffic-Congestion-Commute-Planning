@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SmartRoute AI – Bengaluru Traffic Congestion & Commute Planner
 
 Full-stack AI application with **ONE SmartRouteAgent + FOUR Python Tools + ONE FastAPI Backend + ONE React Frontend**.
@@ -201,3 +202,6 @@ backend/departure_planner/departure.py    ← Preserved as-is
 5. **Uber/Ola/Namma Yatri booking**: The "Book Ride" buttons open the provider's website. Actual API booking requires provider OAuth credentials.
 
 6. **Google Directions transit mode**: May return limited transit data for some Bengaluru routes depending on GTFS feed coverage.
+=======
+
+>>>>>>> a725275779e19637c3d151ab8dcfbec64b8ad1fa

@@ -1,0 +1,6 @@
+{
+  "name": "SmartRoute AI - Commute Planner",
+  "description": "SmartRoute AI intelligent commute planner with real-time traffic map, route comparison, and cab fare optimizer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
