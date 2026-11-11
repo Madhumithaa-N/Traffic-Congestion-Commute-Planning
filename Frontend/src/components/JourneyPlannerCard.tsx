@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { MapPin, Flag, Clock, Calendar, Sparkles, ArrowUpDown, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useMapsLibrary } from '@vis.gl/react-google-maps';
+import { MapPin, Flag, Clock, Sparkles, ArrowUpDown, ChevronDown, Navigation } from 'lucide-react';
 import { sampleLocations } from '../data/mockRoutes';
 
 interface JourneyPlannerCardProps {
@@ -11,6 +12,118 @@ interface JourneyPlannerCardProps {
   isPlanning?: boolean;
 }
 
+// ── Time presets covering all-day commute hours ───────────────────────────────
+const TIME_PRESETS = [
+  '6:00 AM','6:30 AM','7:00 AM','7:30 AM',
+  '8:00 AM','8:30 AM','9:00 AM','9:30 AM',
+  '10:00 AM','10:30 AM','11:00 AM','12:00 PM',
+  '1:00 PM','2:00 PM','3:00 PM','4:00 PM',
+  '5:00 PM','5:30 PM','6:00 PM','6:30 PM',
+  '7:00 PM','8:00 PM','9:00 PM',
+];
+
+// ── Google Places Autocomplete input ─────────────────────────────────────────
+interface PlacesInputProps {
+  value: string;
+  onChange: (val: string) => void;
+  onSelect: (val: string) => void;
+  placeholder: string;
+  icon: React.ReactNode;
+  suggestions: string[];
+  suggestionsLabel: string;
+}
+
+const PlacesInput: React.FC<PlacesInputProps> = ({
+  value, onChange, onSelect, placeholder, icon, suggestions, suggestionsLabel,
+}) => {
+  const placesLib = useMapsLibrary('places');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Wire up Google Places Autocomplete
+  useEffect(() => {
+    if (!placesLib || !inputRef.current) return;
+    if (autocompleteRef.current) return; // already attached
+
+    try {
+      const ac = new placesLib.Autocomplete(inputRef.current, {
+        componentRestrictions: { country: 'in' },
+        fields: ['formatted_address', 'name', 'geometry'],
+        bounds: new google.maps.LatLngBounds(
+          { lat: 12.7343, lng: 77.3795 }, // SW Bengaluru
+          { lat: 13.1407, lng: 77.7832 }  // NE Bengaluru
+        ),
+        strictBounds: false,
+      });
+      autocompleteRef.current = ac;
+
+      ac.addListener('place_changed', () => {
+        const place = ac.getPlace();
+        const name = place.name || place.formatted_address || '';
+        const address = place.formatted_address || name;
+        // Use "Name, City" format for cleaner display
+        const display = name && address && !address.startsWith(name)
+          ? `${name}, ${address.split(',').slice(-2).join(',').trim()}`
+          : address;
+        onSelect(display);
+        setShowSuggestions(false);
+      });
+    } catch { /* ignore if Places API not available */ }
+  }, [placesLib, onSelect]);
+
+  const filtered = suggestions.filter(s =>
+    value.length > 1 ? s.toLowerCase().includes(value.toLowerCase()) : true
+  );
+
+  return (
+    <div className="relative">
+      <div className="relative flex items-center">
+        <span className="absolute left-3 text-slate-400 pointer-events-none">{icon}</span>
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={e => { onChange(e.target.value); setShowSuggestions(true); }}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+          placeholder={placeholder}
+          className="w-full pl-9 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 hover:border-slate-300 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-400"
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          onMouseDown={e => { e.preventDefault(); setShowSuggestions(v => !v); }}
+          className="absolute right-2.5 text-slate-400 hover:text-slate-600 p-0.5"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Suggestions dropdown – only shown when Places autocomplete hasn't taken over */}
+      {showSuggestions && filtered.length > 0 && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-30 max-h-52 overflow-y-auto">
+          <div className="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+            {suggestionsLabel}
+          </div>
+          {filtered.slice(0, 10).map(loc => (
+            <button
+              key={loc}
+              type="button"
+              onMouseDown={e => { e.preventDefault(); onSelect(loc); setShowSuggestions(false); }}
+              className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-slate-50 transition-colors ${value === loc ? 'text-blue-600 font-semibold bg-blue-50/50' : 'text-slate-700'}`}
+            >
+              <Navigation className="w-3 h-3 shrink-0 opacity-50" />
+              <span className="truncate">{loc}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Main JourneyPlannerCard ────────────────────────────────────────────────────
 export const JourneyPlannerCard: React.FC<JourneyPlannerCardProps> = ({
   startLocation,
   destination,
@@ -22,53 +135,74 @@ export const JourneyPlannerCard: React.FC<JourneyPlannerCardProps> = ({
   const [startLoc, setStartLoc] = useState(startLocation);
   const [destLoc, setDestLoc] = useState(destination);
   const [time, setTime] = useState(arrivalTime);
-  const [showStartDropdown, setShowStartDropdown] = useState(false);
-  const [showDestDropdown, setShowDestDropdown] = useState(false);
-  const [showTimeModal, setShowTimeModal] = useState(false);
+  const [timeMode, setTimeMode] = useState<'arrival' | 'departure'>('arrival');
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [customTime, setCustomTime] = useState('');
+  const timePickerRef = useRef<HTMLDivElement>(null);
+
+  // Sync props → local state when parent updates
+  useEffect(() => { setStartLoc(startLocation); }, [startLocation]);
+  useEffect(() => { setDestLoc(destination); }, [destination]);
+  useEffect(() => { setTime(arrivalTime); }, [arrivalTime]);
+
+  // Close time picker on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (timePickerRef.current && !timePickerRef.current.contains(e.target as Node)) {
+        setShowTimePicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const notify = useCallback((s: string, d: string, t: string) => {
+    onUpdate({ startLocation: s, destination: d, arrivalTime: t });
+  }, [onUpdate]);
 
   const handleSwap = () => {
-    const temp = startLoc;
     setStartLoc(destLoc);
-    setDestLoc(temp);
-    onUpdate({ startLocation: destLoc, destination: temp, arrivalTime: time });
+    setDestLoc(startLoc);
+    notify(destLoc, startLoc, time);
   };
 
-  const handleStartSelect = (loc: string) => {
-    setStartLoc(loc);
-    setShowStartDropdown(false);
-    onUpdate({ startLocation: loc, destination: destLoc, arrivalTime: time });
+  const handleTimeSelect = (t: string) => {
+    setTime(t);
+    setShowTimePicker(false);
+    notify(startLoc, destLoc, t);
   };
 
-  const handleDestSelect = (loc: string) => {
-    setDestLoc(loc);
-    setShowDestDropdown(false);
-    onUpdate({ startLocation: startLoc, destination: loc, arrivalTime: time });
-  };
-
-  const handleTimeSelect = (newTime: string) => {
-    setTime(newTime);
-    setShowTimeModal(false);
-    onUpdate({ startLocation: startLoc, destination: destLoc, arrivalTime: newTime });
+  const handleCustomTime = () => {
+    if (!customTime) return;
+    // Convert HH:MM (native time input) to 12-h display
+    const [hStr, mStr] = customTime.split(':');
+    const h = parseInt(hStr, 10), m = parseInt(mStr, 10);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    const display = `${h12}:${m.toString().padStart(2, '0')} ${period}`;
+    handleTimeSelect(display);
+    setCustomTime('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdate({ startLocation: startLoc, destination: destLoc, arrivalTime: time });
+    notify(startLoc, destLoc, time);
     onPlan();
   };
 
+  // Time label shown in input
+  const timeLabel = time
+    ? `${timeMode === 'arrival' ? 'Arrive by' : 'Depart at'} ${time}`
+    : 'Select time';
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 sm:p-6 flex flex-col justify-between h-full">
-      {/* Title */}
       <div>
+        {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
-            <div className="text-blue-600">
-              <MapPin className="w-5 h-5 fill-blue-600 text-blue-600" />
-            </div>
-            <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-              Plan Your Journey
-            </h2>
+            <MapPin className="w-5 h-5 fill-blue-600 text-blue-600" />
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">Plan Your Journey</h2>
           </div>
           <button
             type="button"
@@ -81,183 +215,127 @@ export const JourneyPlannerCard: React.FC<JourneyPlannerCardProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Starting Location */}
-          <div className="relative">
+          {/* Starting Location with Places Autocomplete */}
+          <div>
             <label className="block text-sm font-semibold text-slate-800 mb-1.5">
               Starting Location
             </label>
-            <div className="relative flex items-center">
-              <span className="absolute left-3 text-slate-500 pointer-events-none">
-                <MapPin className="w-4 h-4" />
-              </span>
-              <input
-                type="text"
-                value={startLoc}
-                onChange={(e) => {
-                  setStartLoc(e.target.value);
-                  onUpdate({ startLocation: e.target.value, destination: destLoc, arrivalTime: time });
-                }}
-                onFocus={() => setShowStartDropdown(true)}
-                className="w-full pl-9.5 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 hover:border-slate-300 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-400"
-                placeholder="Enter starting point"
-              />
-              <button
-                type="button"
-                onClick={() => setShowStartDropdown(!showStartDropdown)}
-                className="absolute right-2.5 text-slate-400 hover:text-slate-600 p-0.5"
-              >
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Quick Suggestions Dropdown */}
-            {showStartDropdown && (
-              <>
-                <div
-                  className="fixed inset-0 z-20"
-                  onClick={() => setShowStartDropdown(false)}
-                />
-                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-30 max-h-48 overflow-y-auto">
-                  <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Popular Bengaluru Spots
-                  </div>
-                  {sampleLocations.map((loc) => (
-                    <button
-                      key={loc}
-                      type="button"
-                      onClick={() => handleStartSelect(loc)}
-                      className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-slate-50 transition-colors ${
-                        startLoc === loc ? 'text-blue-600 font-semibold bg-blue-50/50' : 'text-slate-700'
-                      }`}
-                    >
-                      <MapPin className="w-3.5 h-3.5 shrink-0 opacity-60" />
-                      <span className="truncate">{loc}</span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+            <PlacesInput
+              value={startLoc}
+              onChange={v => { setStartLoc(v); notify(v, destLoc, time); }}
+              onSelect={v => { setStartLoc(v); notify(v, destLoc, time); }}
+              placeholder="Enter or search starting point"
+              icon={<MapPin className="w-4 h-4" />}
+              suggestions={sampleLocations}
+              suggestionsLabel="Popular Bengaluru Spots"
+            />
           </div>
 
-          {/* Destination */}
-          <div className="relative">
+          {/* Destination with Places Autocomplete */}
+          <div>
             <label className="block text-sm font-semibold text-slate-800 mb-1.5">
               Destination
             </label>
-            <div className="relative flex items-center">
-              <span className="absolute left-3 text-slate-500 pointer-events-none">
-                <Flag className="w-4 h-4" />
-              </span>
-              <input
-                type="text"
-                value={destLoc}
-                onChange={(e) => {
-                  setDestLoc(e.target.value);
-                  onUpdate({ startLocation: startLoc, destination: e.target.value, arrivalTime: time });
-                }}
-                onFocus={() => setShowDestDropdown(true)}
-                className="w-full pl-9.5 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 hover:border-slate-300 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-400 truncate"
-                placeholder="Enter destination"
-              />
+            <PlacesInput
+              value={destLoc}
+              onChange={v => { setDestLoc(v); notify(startLoc, v, time); }}
+              onSelect={v => { setDestLoc(v); notify(startLoc, v, time); }}
+              placeholder="Enter or search destination"
+              icon={<Flag className="w-4 h-4" />}
+              suggestions={sampleLocations}
+              suggestionsLabel="Popular Destinations"
+            />
+          </div>
+
+          {/* Time picker with Arrival / Departure toggle */}
+          <div className="relative" ref={timePickerRef}>
+            <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+              Travel Time
+            </label>
+
+            {/* Mode toggle pills */}
+            <div className="inline-flex mb-2 p-0.5 bg-slate-100 rounded-lg text-xs font-semibold">
               <button
                 type="button"
-                onClick={() => setShowDestDropdown(!showDestDropdown)}
-                className="absolute right-2.5 text-slate-400 hover:text-slate-600 p-0.5"
+                onClick={() => setTimeMode('arrival')}
+                className={`px-3 py-1 rounded-md transition-all ${timeMode === 'arrival' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                <ChevronDown className="w-3.5 h-3.5" />
+                Arrival time
+              </button>
+              <button
+                type="button"
+                onClick={() => setTimeMode('departure')}
+                className={`px-3 py-1 rounded-md transition-all ${timeMode === 'departure' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Departure time
               </button>
             </div>
 
-            {/* Quick Suggestions Dropdown */}
-            {showDestDropdown && (
-              <>
-                <div
-                  className="fixed inset-0 z-20"
-                  onClick={() => setShowDestDropdown(false)}
-                />
-                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-30 max-h-48 overflow-y-auto">
-                  <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Popular Destinations
-                  </div>
-                  {sampleLocations.map((loc) => (
+            {/* Time display input */}
+            <div className="relative flex items-center">
+              <span className="absolute left-3 text-slate-400 pointer-events-none">
+                <Clock className="w-4 h-4" />
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowTimePicker(!showTimePicker)}
+                className="w-full text-left pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 hover:border-slate-300 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+              >
+                {timeLabel}
+              </button>
+            </div>
+
+            {/* Time picker dropdown */}
+            {showTimePicker && (
+              <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-40">
+                <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                  {timeMode === 'arrival' ? 'Select Arrival Time' : 'Select Departure Time'}
+                </div>
+
+                {/* Preset grid */}
+                <div className="grid grid-cols-4 gap-1 mb-3 max-h-40 overflow-y-auto">
+                  {TIME_PRESETS.map(preset => (
                     <button
-                      key={loc}
+                      key={preset}
                       type="button"
-                      onClick={() => handleDestSelect(loc)}
-                      className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-slate-50 transition-colors ${
-                        destLoc === loc ? 'text-blue-600 font-semibold bg-blue-50/50' : 'text-slate-700'
+                      onClick={() => handleTimeSelect(preset)}
+                      className={`py-1.5 px-1 rounded-lg text-xs font-medium text-center transition-colors ${
+                        time === preset
+                          ? 'bg-blue-600 text-white font-semibold'
+                          : 'bg-slate-50 hover:bg-blue-50 hover:text-blue-700 text-slate-700'
                       }`}
                     >
-                      <Flag className="w-3.5 h-3.5 shrink-0 opacity-60" />
-                      <span className="truncate">{loc}</span>
+                      {preset}
                     </button>
                   ))}
                 </div>
-              </>
-            )}
-          </div>
 
-          {/* Required Arrival Time */}
-          <div className="relative">
-            <label className="block text-sm font-semibold text-slate-800 mb-1.5">
-              Required Arrival Time
-            </label>
-            <div className="relative flex items-center">
-              <span className="absolute left-3 text-slate-500 pointer-events-none">
-                <Clock className="w-4 h-4" />
-              </span>
-              <input
-                type="text"
-                value={time}
-                onClick={() => setShowTimeModal(true)}
-                readOnly
-                className="w-full pl-9.5 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 cursor-pointer hover:border-slate-300 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
-              />
-              <button
-                type="button"
-                onClick={() => setShowTimeModal(!showTimeModal)}
-                className="absolute right-3 text-slate-500 hover:text-blue-600 transition-colors"
-                title="Change Arrival Time"
-              >
-                <Calendar className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Time Picker Dropdown */}
-            {showTimeModal && (
-              <>
-                <div
-                  className="fixed inset-0 z-20"
-                  onClick={() => setShowTimeModal(false)}
-                />
-                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl shadow-lg border border-slate-200 p-2 z-30">
-                  <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-2 py-1">
-                    Select Target Arrival
+                {/* Custom time input */}
+                <div className="border-t border-slate-100 pt-2 mt-1">
+                  <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Custom time
                   </div>
-                  <div className="grid grid-cols-3 gap-1.5 mt-1">
-                    {['8:30 AM', '8:45 AM', '9:00 AM', '9:15 AM', '9:30 AM', '10:00 AM'].map(
-                      (preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => handleTimeSelect(preset)}
-                          className={`py-1.5 px-2 rounded-lg text-xs font-medium text-center transition-colors ${
-                            time === preset
-                              ? 'bg-blue-600 text-white font-semibold'
-                              : 'bg-slate-50 hover:bg-slate-100 text-slate-700'
-                          }`}
-                        >
-                          {preset}
-                        </button>
-                      )
-                    )}
+                  <div className="flex gap-2">
+                    <input
+                      type="time"
+                      value={customTime}
+                      onChange={e => setCustomTime(e.target.value)}
+                      className="flex-1 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCustomTime}
+                      className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Set
+                    </button>
                   </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
 
-          {/* Action Button */}
+          {/* Plan button */}
           <div className="pt-2">
             <button
               type="submit"
@@ -280,7 +358,6 @@ export const JourneyPlannerCard: React.FC<JourneyPlannerCardProps> = ({
         </form>
       </div>
 
-      {/* Subtle footnote */}
       <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
         <span>Bengaluru Traffic AI Engine</span>
         <span className="text-emerald-600 font-medium">⚡ Real-time synced</span>

@@ -1,0 +1,28 @@
+# config/__init__.py
+from .settings import (
+    GOOGLE_MAPS_API_KEY,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    GEMINI_ENDPOINT,
+    ML_MODEL_PATH,
+    ML_CSV_PATH,
+    REQUEST_TIMEOUT,
+    CORS_ORIGINS,
+    TRAFFIC_CACHE_TTL,
+    BACKEND_HOST,
+    BACKEND_PORT,
+)
+
+__all__ = [
+    "GOOGLE_MAPS_API_KEY",
+    "GEMINI_API_KEY",
+    "GEMINI_MODEL",
+    "GEMINI_ENDPOINT",
+    "ML_MODEL_PATH",
+    "ML_CSV_PATH",
+    "REQUEST_TIMEOUT",
+    "CORS_ORIGINS",
+    "TRAFFIC_CACHE_TTL",
+    "BACKEND_HOST",
+    "BACKEND_PORT",
+]
