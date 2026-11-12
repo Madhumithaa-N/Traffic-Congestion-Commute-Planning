@@ -62,7 +62,6 @@ services:
   - type: web
     name: smartroute-frontend
     runtime: static
-    region: oregon
     plan: free
 
     # Root directory containing package.json
