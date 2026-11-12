@@ -12,6 +12,7 @@ import { BookRideModal } from './components/BookRideModal';
 import { TransitDetailsModal } from './components/TransitDetailsModal';
 import { MetroStationPanel } from './components/MetroStationPanel';
 import { SmartRouteAnalysisPanel } from './components/SmartRouteAnalysisPanel';
+import { TrafficHotspotsPanel } from './components/TrafficHotspotsPanel';
 import {
   defaultJourneyData,
   JourneyData,
@@ -30,7 +31,7 @@ const MAPS_API_KEY =
 function mapCongestion(level: string): 'Fast' | 'Moderate' | 'Heavy' {
   if (!level) return 'Fast';
   const u = level.toUpperCase();
-  if (u === 'HEAVY') return 'Heavy';
+  if (u === 'HEAVY' || u === 'SEVERE') return 'Heavy';
   if (u === 'MODERATE') return 'Moderate';
   return 'Fast';
 }
@@ -481,6 +482,9 @@ export default function App() {
           selectedRouteId={selectedRouteId}
           onSelectRoute={handleRouteSelect}
         />
+
+        {/* 3. Bengaluru Traffic Hotspots – always visible, auto-refreshes */}
+        <TrafficHotspotsPanel />
 
         {/* Mode Filter Selector Pill Tabs */}
         <div className="mt-7 mb-2 flex items-center justify-between flex-wrap gap-3">

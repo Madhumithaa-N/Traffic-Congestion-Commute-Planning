@@ -125,7 +125,7 @@ def _build_recommendation(
     recommended_option = routes.get("overall_recommendation", "")
     if recommended_option:
         rec_str = recommended_option
-    elif congestion in ("HEAVY",) and best_transit:
+    elif congestion in ("HEAVY", "SEVERE") and best_transit:
         rec_str = (
             f"Heavy traffic detected ({delay} min delay). "
             f"Consider {best_transit.get('mode', 'transit')} "
@@ -405,7 +405,7 @@ class SmartRouteAgent:
             else:
                 area = "Central"
 
-            congestion = traffic.get("congestion_level", "LOW / NORMAL")
+            congestion = traffic.get("congestion_level", "LOW")
             incident_type = "None"
             incidents = traffic.get("incidents_and_roadblocks", {})
             if incidents.get("road_restriction_detected"):
@@ -444,12 +444,12 @@ class SmartRouteAgent:
         if not best_route:
             return None
 
-        congestion = best_route.get("congestion_level") or traffic.get("congestion_level", "LOW / NORMAL")
+        congestion = best_route.get("congestion_level") or traffic.get("congestion_level", "LOW")
         traffic_level_map = {
             "LOW": "Low",
-            "LOW / NORMAL": "Low",
             "MODERATE": "Medium",
             "HEAVY": "High",
+            "SEVERE": "High",
         }
         traffic_level = traffic_level_map.get(congestion.upper() if congestion else "", "Medium")
 

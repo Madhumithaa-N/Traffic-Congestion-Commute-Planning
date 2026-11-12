@@ -27,8 +27,15 @@ export const RouteComparison: React.FC<RouteComparisonProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {routes.map((route) => {
           const isSelected = route.id === selectedRouteId;
-          const isModerate = route.trafficStatus === 'Moderate';
-          const isHeavy = route.trafficStatus === 'Heavy';
+          const status = route.trafficStatus; // 'Fast' | 'Moderate' | 'Heavy' from mapCongestion
+
+          // Traffic pill config – maps 3-value trafficStatus to display
+          const pillConfig = {
+            Heavy:    { bg: 'bg-[#fff7ed]', text: 'text-[#c2410c]', border: 'border-[#fed7aa]', dot: 'bg-[#f97316]', label: 'HEAVY' },
+            Moderate: { bg: 'bg-[#fef3c7]', text: 'text-[#92400e]', border: 'border-[#fde68a]', dot: 'bg-[#f59e0b]', label: 'MODERATE' },
+            Fast:     { bg: 'bg-[#dcfce7]', text: 'text-[#166534]', border: 'border-[#bbf7d0]', dot: 'bg-[#22c55e]', label: 'LOW' },
+          } as const;
+          const pill = pillConfig[status] ?? pillConfig.Fast;
 
           return (
             <div
@@ -75,24 +82,10 @@ export const RouteComparison: React.FC<RouteComparisonProps> = ({
 
               {/* Right Column: Traffic Status Pill */}
               <div className="shrink-0 pl-2">
-                {isModerate && (
-                  <div className="inline-flex items-center gap-1.5 bg-[#fef3c7] text-[#92400e] border border-[#fde68a] text-xs font-semibold px-3 py-1 rounded-full">
-                    <span className="w-2 h-2 rounded-full bg-[#f59e0b]" />
-                    <span>Moderate</span>
-                  </div>
-                )}
-                {isHeavy && (
-                  <div className="inline-flex items-center gap-1.5 bg-[#fee2e2] text-[#991b1b] border border-[#fecaca] text-xs font-semibold px-3 py-1 rounded-full">
-                    <span className="w-2 h-2 rounded-full bg-[#ef4444]" />
-                    <span>Heavy</span>
-                  </div>
-                )}
-                {!isModerate && !isHeavy && (
-                  <div className="inline-flex items-center gap-1.5 bg-[#dcfce7] text-[#166534] border border-[#bbf7d0] text-xs font-semibold px-3 py-1 rounded-full">
-                    <span className="w-2 h-2 rounded-full bg-[#22c55e]" />
-                    <span>Fast</span>
-                  </div>
-                )}
+                <div className={`inline-flex items-center gap-1.5 ${pill.bg} ${pill.text} border ${pill.border} text-xs font-semibold px-3 py-1 rounded-full`}>
+                  <span className={`w-2 h-2 rounded-full ${pill.dot}`} />
+                  <span>{pill.label}</span>
+                </div>
               </div>
             </div>
           );

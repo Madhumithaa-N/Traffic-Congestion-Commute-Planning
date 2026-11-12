@@ -52,6 +52,7 @@ from tools import (  # noqa: E402
 )
 from agent import SmartRouteAgent  # noqa: E402
 from services.metro_finder import find_nearby_stations  # noqa: E402
+from traffic_monitoring.hotspots import get_traffic_hotspots  # noqa: E402
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -74,17 +75,23 @@ app = FastAPI(
 )
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-# For local development: allow all origins so the React dev server (any port)
-# and production build can always reach the API without 400 preflight errors.
-# In production, restrict this to your actual frontend domain.
-_allow_origins = CORS_ORIGINS if CORS_ORIGINS != [""] else ["*"]
+# CORS_ORIGINS is read from the environment (set in .env or Render Dashboard).
+# When not set, defaults to localhost dev ports.
+# In production on Render, set CORS_ORIGINS to your frontend's Render URL, e.g.:
+#   https://smartroute-frontend.onrender.com,http://localhost:3000
+#
+# If CORS_ORIGINS contains "*" as one of its values, open mode is used
+# (needed for Render free tier where the exact URL isn't known until after deploy).
+_cors_origins = [o.strip() for o in CORS_ORIGINS if o.strip()]
+_use_wildcard = not _cors_origins or "*" in _cors_origins
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # dev: open – restrict in production
-    allow_credentials=False,      # must be False when allow_origins=["*"]
+    allow_origins=["*"] if _use_wildcard else _cors_origins,
+    allow_credentials=False,      # must be False when allow_origins includes "*"
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # ── Singleton agent ───────────────────────────────────────────────────────────
@@ -329,6 +336,52 @@ async def nearby_metro(body: _MetroReq) -> GenericResponse:
         warnings=["Walking times are estimates based on straight-line distance × 1.3 detour factor."]
             if not result.get("error") else [],
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TRAFFIC HOTSPOTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _HotspotsReq(BaseModel):
+    top_n: int = 5
+
+
+@app.post("/api/traffic/hotspots", response_model=GenericResponse, tags=["Traffic"])
+async def traffic_hotspots(body: _HotspotsReq) -> GenericResponse:
+    """
+    Return the top-N most congested Bengaluru corridors right now.
+
+    Queries the Google Routes API for a fixed set of monitored corridors
+    (Silk Board, Marathahalli, KR Puram, Hebbal, Electronic City, etc.)
+    and ranks them by live traffic delay.
+
+    Responses are cached for TRAFFIC_CACHE_TTL seconds to avoid hammering
+    the API on every dashboard refresh.
+    """
+    logger.info("traffic_hotspots  top_n=%d", body.top_n)
+    result = get_traffic_hotspots(top_n=body.top_n)
+
+    if result.get("status") == "error":
+        return GenericResponse(
+            status="error",
+            error=result.get("error", "Hotspot data unavailable"),
+            data_sources=["google_routes_api_v2"],
+            timestamp=datetime.utcnow().isoformat() + "Z",
+        )
+
+    return GenericResponse(
+        status="ok",
+        data=result,
+        data_sources=[result.get("data_source", "google_routes_api_v2")],
+        timestamp=datetime.utcnow().isoformat() + "Z",
+    )
+
+
+# Also expose as GET for simple browser/curl access
+@app.get("/api/traffic/hotspots", response_model=GenericResponse, tags=["Traffic"])
+async def traffic_hotspots_get() -> GenericResponse:
+    """GET version of the hotspots endpoint (returns top 5)."""
+    return await traffic_hotspots(_HotspotsReq(top_n=5))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

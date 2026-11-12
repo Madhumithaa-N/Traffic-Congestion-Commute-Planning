@@ -29,20 +29,53 @@ export interface TrafficData {
   origin: string;
   destination: string;
   distance_km: number;
-  congestion_level: string;
+  congestion_level: string;          // LOW | MODERATE | HEAVY | SEVERE
   traffic_delay_mins: number;
+  delay_percentage: number;          // delay as % of free-flow time
   current_time_with_traffic_mins: number;
   average_time_to_travel_mins: number;
   average_normal_speed_kmph: number;
   current_traffic_speed_kmph: number;
   is_heavy_traffic: boolean;
+  traffic_summary?: string;          // human-readable paragraph
   route_description?: string;
   incidents_and_roadblocks?: {
     incident_likelihood: string;
     anomalous_segments_detected: boolean;
     road_restriction_detected: boolean;
+    slowest_segment_speed_kmph?: number | null;
   };
   data_source: string;
+}
+
+export interface HotspotArea {
+  area: string;
+  origin: string;
+  destination: string;
+  congestion_level: string;          // LOW | MODERATE | HEAVY | SEVERE
+  traffic_delay_mins: number;
+  delay_percentage: number;
+  current_traffic_speed_kmph: number;
+  average_normal_speed_kmph: number;
+  current_time_with_traffic_mins: number;
+  average_time_to_travel_mins: number;
+  distance_km: number;
+  is_heavy_traffic: boolean;
+  incidents_and_roadblocks: {
+    incident_likelihood: string;
+    road_restriction_detected: boolean;
+  };
+  traffic_summary: string;
+}
+
+export interface HotspotsData {
+  status: string;
+  hotspots: HotspotArea[];
+  total_monitored: number;
+  successful_queries: number;
+  timestamp: string;
+  data_source: string;
+  cache_hit: boolean;
 }
 
 export interface RouteStep {
@@ -57,9 +90,12 @@ export interface BestRoute {
   distance_km: number;
   duration_mins: number;
   static_mins: number;
+  static_duration_mins?: number;   // backward-compat alias
   delay_mins: number;
-  congestion_level: string;
+  traffic_delay_mins?: number;     // backward-compat alias
+  congestion_level: string;        // LOW | MODERATE | HEAVY | SEVERE
   has_restriction: boolean;
+  has_road_restriction?: boolean;  // backward-compat alias
   steps: RouteStep[];
 }
 
@@ -233,4 +269,11 @@ export async function findNearbyMetro(
   maxResults = 3
 ): Promise<MetroNearbyResponse> {
   return post<MetroNearbyResponse>('/api/metro/nearby', { address, max_results: maxResults });
+}
+
+/** Fetch live Bengaluru traffic hotspots ranked by congestion. */
+export async function getTrafficHotspots(
+  topN = 5
+): Promise<{ status: string; data: HotspotsData; warnings?: string[] }> {
+  return post('/api/traffic/hotspots', { top_n: topN });
 }

@@ -1,0 +1,4 @@
+# Render Static Site SPA routing
+# Rewrite all paths to index.html so React Router (and Vite SPA) works correctly.
+# This file is automatically copied to dist/ by Vite during build.
+/*    /index.html   200

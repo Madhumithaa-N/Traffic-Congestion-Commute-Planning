@@ -286,11 +286,6 @@ export const GoogleTrafficMap: React.FC<GoogleTrafficMapProps> = ({
         mapTypeId={mapType}
         className="w-full h-full"
         disableDefaultUI={false}
-        styles={[
-          // Slightly de-saturate POI labels so route stands out
-          { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'simplified' }] },
-          { featureType: 'transit', elementType: 'labels', stylers: [{ visibility: 'on' }] },
-        ]}
       >
         {startLabel && destLabel && (
           <MapLayer

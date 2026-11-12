@@ -169,9 +169,11 @@ def _parse_driving_routes(raw: dict) -> list[dict]:
             continue
         seen_fingerprints.add(fp)
 
-        # Congestion classification
+        # Congestion classification (mirrors traffic.py tiers)
         time_ratio = (duration_mins / static_mins) if static_mins > 0 else 1.0
-        if time_ratio >= 1.40 or delay_mins >= 15:
+        if time_ratio >= 2.00 or delay_mins >= 30:
+            congestion = "SEVERE"
+        elif time_ratio >= 1.40 or delay_mins >= 15:
             congestion = "HEAVY"
         elif time_ratio >= 1.15 or delay_mins >= 5:
             congestion = "MODERATE"
@@ -203,10 +205,13 @@ def _parse_driving_routes(raw: dict) -> list[dict]:
             "distance_km": distance_km,
             "duration_text": _duration_text(duration_secs),
             "duration_mins": duration_mins,
-            "static_duration_mins": static_mins,
-            "traffic_delay_mins": delay_mins,
+            "static_mins": static_mins,          # canonical field name
+            "static_duration_mins": static_mins,  # backward-compat alias
+            "delay_mins": delay_mins,             # canonical field name
+            "traffic_delay_mins": delay_mins,     # backward-compat alias
             "congestion_level": congestion,
             "has_road_restriction": has_restriction,
+            "has_restriction": has_restriction,   # backward-compat alias
             "restriction_reason": restriction.get("restrictionReason") if has_restriction else None,
             "polyline": r.get("polyline", {}).get("encodedPolyline", None),
             "steps": steps,
@@ -668,7 +673,7 @@ def _python_fallback_recommendations(
     distance_km = best_drive.get("distance_km", 0)
 
     # Build best-route explanation
-    if congestion == "HEAVY":
+    if congestion in ("HEAVY", "SEVERE"):
         explanation = (
             f"The fastest driving route covers {distance_km} km in "
             f"~{drive_mins} min with {delay_mins} min of traffic delay "
@@ -729,11 +734,11 @@ def _python_fallback_recommendations(
             ),
             "estimated_total_mins": t.get("total_duration_mins"),
             "estimated_fare": t.get("fare", "unknown"),
-            "suitability": "GOOD" if congestion in ("HEAVY", "MODERATE") else "FALLBACK",
+            "suitability": "GOOD" if congestion in ("HEAVY", "SEVERE", "MODERATE") else "FALLBACK",
         })
 
     # Overall recommendation
-    if congestion == "HEAVY" and transport_options:
+    if congestion in ("HEAVY", "SEVERE") and transport_options:
         best_transit = min(transport_options, key=lambda t: t.get("total_duration_mins", 9999))
         recommendation = (
             f"Heavy traffic detected ({delay_mins} min delay). "

@@ -22,7 +22,13 @@ const TIME_PRESETS = [
   '7:00 PM','8:00 PM','9:00 PM',
 ];
 
-// ── Google Places Autocomplete input ─────────────────────────────────────────
+// ── Bengaluru bounding box for location bias ──────────────────────────────────
+const BENGALURU_BOUNDS: google.maps.LatLngBoundsLiteral = {
+  south: 12.7343, west: 77.3795,
+  north: 13.1407, east: 77.7832,
+};
+
+// ── Google Places API (New) autocomplete input ────────────────────────────────
 interface PlacesInputProps {
   value: string;
   onChange: (val: string) => void;
@@ -38,43 +44,111 @@ const PlacesInput: React.FC<PlacesInputProps> = ({
 }) => {
   const placesLib = useMapsLibrary('places');
   const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [apiSuggestions, setApiSuggestions] = useState<
+    Array<{ label: string; prediction: google.maps.places.PlacePrediction }>
+  >([]);
+  // Session token ref – created once per session, replaced after each selection
+  const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
+  // Abort signal for in-flight requests
+  const abortCtrlRef = useRef<AbortController | null>(null);
+  // Debounce timer
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Wire up Google Places Autocomplete
-  useEffect(() => {
-    if (!placesLib || !inputRef.current) return;
-    if (autocompleteRef.current) return; // already attached
+  // Lazily create a session token once placesLib is available
+  const getOrCreateToken = useCallback(() => {
+    if (!placesLib) return null;
+    if (!sessionTokenRef.current) {
+      sessionTokenRef.current = new placesLib.AutocompleteSessionToken();
+    }
+    return sessionTokenRef.current;
+  }, [placesLib]);
+
+  // Fetch autocomplete suggestions using Places API (New)
+  const fetchSuggestions = useCallback(async (query: string) => {
+    if (!placesLib || query.length < 2) {
+      setApiSuggestions([]);
+      return;
+    }
+
+    // Cancel any in-flight request
+    abortCtrlRef.current?.abort();
+    abortCtrlRef.current = new AbortController();
+    const { signal } = abortCtrlRef.current;
 
     try {
-      const ac = new placesLib.Autocomplete(inputRef.current, {
-        componentRestrictions: { country: 'in' },
-        fields: ['formatted_address', 'name', 'geometry'],
-        bounds: new google.maps.LatLngBounds(
-          { lat: 12.7343, lng: 77.3795 }, // SW Bengaluru
-          { lat: 13.1407, lng: 77.7832 }  // NE Bengaluru
-        ),
-        strictBounds: false,
+      const { suggestions } = await placesLib.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        input: query,
+        includedRegionCodes: ['in'],
+        locationBias: BENGALURU_BOUNDS,
+        sessionToken: getOrCreateToken() ?? undefined,
       });
-      autocompleteRef.current = ac;
 
-      ac.addListener('place_changed', () => {
-        const place = ac.getPlace();
-        const name = place.name || place.formatted_address || '';
-        const address = place.formatted_address || name;
-        // Use "Name, City" format for cleaner display
-        const display = name && address && !address.startsWith(name)
-          ? `${name}, ${address.split(',').slice(-2).join(',').trim()}`
-          : address;
-        onSelect(display);
-        setShowSuggestions(false);
-      });
-    } catch { /* ignore if Places API not available */ }
+      if (signal.aborted) return;
+
+      const mapped = suggestions
+        .map(s => s.placePrediction)
+        .filter((p): p is google.maps.places.PlacePrediction => p !== null)
+        .map(prediction => ({
+          label: prediction.text?.toString() ?? '',
+          prediction,
+        }))
+        .filter(s => s.label.length > 0);
+
+      setApiSuggestions(mapped);
+    } catch {
+      if (!signal.aborted) setApiSuggestions([]);
+    }
+  }, [placesLib, getOrCreateToken]);
+
+  // Debounced fetch on value change
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!showSuggestions) return;
+    debounceRef.current = setTimeout(() => {
+      fetchSuggestions(value);
+    }, 200);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [value, showSuggestions, fetchSuggestions]);
+
+  // On API suggestion click: resolve full place details then call onSelect
+  const handleApiSelect = useCallback(async (
+    prediction: google.maps.places.PlacePrediction,
+  ) => {
+    if (!placesLib) return;
+
+    // End current session after selection – create a new token for next session
+    const place = prediction.toPlace();
+    try {
+      await place.fetchFields({ fields: ['displayName', 'formattedAddress'] });
+    } catch {
+      // fetchFields failed – fall back to prediction text
+    }
+
+    // Reset session token so the next search gets a fresh session
+    sessionTokenRef.current = null;
+
+    const name = place.displayName ?? '';
+    const address = place.formattedAddress ?? '';
+    const display = name && address && !address.startsWith(name)
+      ? `${name}, ${address.split(',').slice(-2).join(',').trim()}`
+      : (address || name || prediction.text?.toString() || '');
+
+    setApiSuggestions([]);
+    setShowSuggestions(false);
+    onSelect(display);
   }, [placesLib, onSelect]);
 
+  // Sample-location suggestions (filtered)
   const filtered = suggestions.filter(s =>
     value.length > 1 ? s.toLowerCase().includes(value.toLowerCase()) : true
   );
+
+  // Determine which suggestion lists to show
+  const showApiList = apiSuggestions.length > 0;
+  const showSampleList = !showApiList && filtered.length > 0;
 
   return (
     <div className="relative">
@@ -86,7 +160,7 @@ const PlacesInput: React.FC<PlacesInputProps> = ({
           value={value}
           onChange={e => { onChange(e.target.value); setShowSuggestions(true); }}
           onFocus={() => setShowSuggestions(true)}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+          onBlur={() => setTimeout(() => { setShowSuggestions(false); setApiSuggestions([]); }, 200)}
           placeholder={placeholder}
           className="w-full pl-9 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 hover:border-slate-300 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-slate-400"
           autoComplete="off"
@@ -100,8 +174,28 @@ const PlacesInput: React.FC<PlacesInputProps> = ({
         </button>
       </div>
 
-      {/* Suggestions dropdown – only shown when Places autocomplete hasn't taken over */}
-      {showSuggestions && filtered.length > 0 && (
+      {/* Places API (New) suggestions */}
+      {showSuggestions && showApiList && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-30 max-h-52 overflow-y-auto">
+          <div className="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+            Places
+          </div>
+          {apiSuggestions.slice(0, 8).map((s, i) => (
+            <button
+              key={i}
+              type="button"
+              onMouseDown={e => { e.preventDefault(); handleApiSelect(s.prediction); }}
+              className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-slate-50 transition-colors ${value === s.label ? 'text-blue-600 font-semibold bg-blue-50/50' : 'text-slate-700'}`}
+            >
+              <Navigation className="w-3 h-3 shrink-0 opacity-50" />
+              <span className="truncate">{s.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Sample location suggestions – shown when no API suggestions */}
+      {showSuggestions && showSampleList && (
         <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-30 max-h-52 overflow-y-auto">
           <div className="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
             {suggestionsLabel}

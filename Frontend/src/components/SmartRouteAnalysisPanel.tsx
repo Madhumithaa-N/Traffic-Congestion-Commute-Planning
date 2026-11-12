@@ -113,23 +113,26 @@ function useTrafficData(
 }
 
 // ── Severity helpers ──────────────────────────────────────────────────────────
-type Severity = 'low' | 'moderate' | 'heavy' | 'unknown';
+// Four tiers matching backend: LOW | MODERATE | HEAVY | SEVERE
+type Severity = 'low' | 'moderate' | 'heavy' | 'severe' | 'unknown';
 
 function sev(level: string | undefined): Severity {
   if (!level) return 'unknown';
   const u = level.toUpperCase().replace(/[^A-Z]/g, '');
-  if (u.includes('HEAVY') || u.includes('HIGH'))   return 'heavy';
-  if (u.includes('MODERATE') || u.includes('MEDIUM')) return 'moderate';
-  if (u.includes('LOW') || u.includes('NORMAL') || u.includes('FAST')) return 'low';
+  if (u === 'SEVERE')   return 'severe';
+  if (u === 'HEAVY' || u === 'HIGH') return 'heavy';
+  if (u === 'MODERATE' || u === 'MEDIUM') return 'moderate';
+  if (u === 'LOW' || u === 'NORMAL' || u === 'FAST') return 'low';
   return 'unknown';
 }
 
-// Traffic severity colour tokens
-const T: Record<Severity, { dot: string; bg: string; text: string; border: string; bar: string; label: string }> = {
-  low:     { dot: 'bg-emerald-500', bg: 'bg-emerald-50',  text: 'text-emerald-700', border: 'border-emerald-200', bar: 'bg-emerald-500', label: 'Clear' },
-  moderate:{ dot: 'bg-amber-400',   bg: 'bg-amber-50',    text: 'text-amber-700',   border: 'border-amber-200',   bar: 'bg-amber-400',   label: 'Moderate' },
-  heavy:   { dot: 'bg-red-500',     bg: 'bg-red-50',      text: 'text-red-700',     border: 'border-red-200',     bar: 'bg-red-500',     label: 'Heavy' },
-  unknown: { dot: 'bg-slate-400',   bg: 'bg-slate-50',    text: 'text-slate-500',   border: 'border-slate-200',   bar: 'bg-slate-300',   label: 'Checking…' },
+// Traffic severity colour tokens – 4 tiers + unknown
+const T: Record<Severity, { dot: string; bg: string; text: string; border: string; bar: string; label: string; headlineText: string }> = {
+  low:     { dot: 'bg-emerald-500', bg: 'bg-emerald-50',  text: 'text-emerald-700', border: 'border-emerald-200', bar: 'bg-emerald-500', label: 'LOW',      headlineText: 'Roads are clear – great time to travel' },
+  moderate:{ dot: 'bg-amber-400',   bg: 'bg-amber-50',    text: 'text-amber-700',   border: 'border-amber-200',   bar: 'bg-amber-400',   label: 'MODERATE', headlineText: 'Moderate congestion – expect some slowdowns' },
+  heavy:   { dot: 'bg-orange-500',  bg: 'bg-orange-50',   text: 'text-orange-700',  border: 'border-orange-200',  bar: 'bg-orange-500',  label: 'HEAVY',    headlineText: 'Heavy congestion – consider alternative routes' },
+  severe:  { dot: 'bg-red-600',     bg: 'bg-red-50',      text: 'text-red-700',     border: 'border-red-300',     bar: 'bg-red-600',     label: 'SEVERE',   headlineText: 'Severe congestion – strongly consider alternatives' },
+  unknown: { dot: 'bg-slate-400',   bg: 'bg-slate-50',    text: 'text-slate-500',   border: 'border-slate-200',   bar: 'bg-slate-300',   label: '—',        headlineText: 'Fetching live conditions…' },
 };
 
 // ── Reusable atoms ────────────────────────────────────────────────────────────
@@ -139,14 +142,18 @@ function CongestionPill({ level }: { level: string | undefined }) {
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${c.bg} ${c.text} ${c.border}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${c.dot} shrink-0`} />
-      {level?.replace('/', ' / ') ?? 'Unknown'}
+      {c.label !== '—' ? c.label : (level ?? 'Unknown')}
     </span>
   );
 }
 
-function SeverityBar({ level }: { level: string | undefined }) {
+// SeverityBar uses delay_percentage (0–100+) from the API; falls back to
+// tier-based percentage estimates only when delay_percentage is unavailable.
+function SeverityBar({ level, delayPct }: { level: string | undefined; delayPct?: number }) {
   const s = sev(level);
-  const pct = s === 'heavy' ? 88 : s === 'moderate' ? 52 : s === 'low' ? 18 : 0;
+  const tierFallback = s === 'severe' ? 95 : s === 'heavy' ? 75 : s === 'moderate' ? 45 : s === 'low' ? 15 : 0;
+  // Cap at 100 for display; delay_percentage can exceed 100 for severe gridlock
+  const pct = Math.min(100, delayPct != null && delayPct > 0 ? Math.round(delayPct) : tierFallback);
   return (
     <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
       <div className={`h-full rounded-full transition-all duration-700 ${T[s].bar}`} style={{ width: `${pct}%` }} />
@@ -309,9 +316,14 @@ export const SmartRouteAnalysisPanel: React.FC<SmartRouteAnalysisPanelProps> = (
   const trafficSev   = sev(traffic?.congestion_level);
   const trafficCfg   = T[trafficSev];
   const delayMins    = Math.round(traffic?.traffic_delay_mins ?? 0);
+  const delayPct     = traffic?.delay_percentage ?? 0;
   const currSpeed    = Math.round(traffic?.current_traffic_speed_kmph ?? 0);
   const normalSpeed  = Math.round(traffic?.average_normal_speed_kmph ?? 0);
-  const etaMins      = Math.round(traffic?.current_time_with_traffic_mins ?? 0);
+  // Guard against 0 / NaN ETA — only show when the value is meaningful (> 0)
+  const etaRaw       = traffic?.current_time_with_traffic_mins;
+  const etaMins      = etaRaw != null && etaRaw > 0 ? Math.round(etaRaw) : null;
+  const staticRaw    = traffic?.average_time_to_travel_mins;
+  const staticMins   = staticRaw != null && staticRaw > 0 ? Math.round(staticRaw) : null;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
@@ -391,7 +403,7 @@ export const SmartRouteAnalysisPanel: React.FC<SmartRouteAnalysisPanelProps> = (
                 sub={delayMins > 0 ? `+${delayMins} min delay` : 'no delay'}
                 color={delayMins > 10 ? 'text-red-600' : delayMins > 3 ? 'text-amber-600' : 'text-emerald-600'} />
               <Kpi label="Current Speed" value={`${currSpeed} km/h`} sub={`normal ${normalSpeed} km/h`} />
-              <Kpi label="ETA" value={`${etaMins} min`} sub="with live traffic" />
+              <Kpi label="ETA" value={etaMins != null ? `${etaMins} min` : 'N/A'} sub="with live traffic" />
             </div>
           )}
 
@@ -473,15 +485,10 @@ export const SmartRouteAnalysisPanel: React.FC<SmartRouteAnalysisPanelProps> = (
                     {trafficSev === 'low'      && <CheckCircle2  className={`w-4 h-4 ${trafficCfg.text}`} />}
                     {trafficSev === 'moderate' && <AlertTriangle className={`w-4 h-4 ${trafficCfg.text}`} />}
                     {trafficSev === 'heavy'    && <ShieldAlert   className={`w-4 h-4 ${trafficCfg.text}`} />}
+                    {trafficSev === 'severe'   && <ShieldAlert   className={`w-4 h-4 ${trafficCfg.text}`} />}
                     {trafficSev === 'unknown'  && <Gauge         className={`w-4 h-4 ${trafficCfg.text}`} />}
                     <span className={`text-sm font-bold ${trafficCfg.text}`}>
-                      {trafficSev === 'low'
-                        ? 'Roads are clear – great time to travel'
-                        : trafficSev === 'moderate'
-                          ? 'Moderate congestion – expect some slowdowns'
-                          : trafficSev === 'heavy'
-                            ? 'Heavy congestion – consider alternative times'
-                            : 'Fetching live conditions…'}
+                      {trafficCfg.headlineText}
                     </span>
                   </div>
                   <CongestionPill level={traffic.congestion_level} />
@@ -489,7 +496,7 @@ export const SmartRouteAnalysisPanel: React.FC<SmartRouteAnalysisPanelProps> = (
 
                 {/* Severity fill bar */}
                 <div className="px-4 pt-2 pb-1 bg-white">
-                  <SeverityBar level={traffic.congestion_level} />
+                  <SeverityBar level={traffic.congestion_level} delayPct={delayPct} />
                 </div>
 
                 {/* 4 data cells – all from API response */}
@@ -540,7 +547,7 @@ export const SmartRouteAnalysisPanel: React.FC<SmartRouteAnalysisPanelProps> = (
                       <Clock className="w-3 h-3" /><span>ETA with traffic</span>
                     </div>
                     <span className="text-sm text-slate-800 font-semibold">
-                      {etaMins > 0 ? `${etaMins} min` : '—'}
+                      {etaMins != null ? `${etaMins} min` : 'N/A'}
                     </span>
                   </div>
                   <div className="flex flex-col gap-0.5 bg-white px-3 py-2.5">
@@ -548,9 +555,7 @@ export const SmartRouteAnalysisPanel: React.FC<SmartRouteAnalysisPanelProps> = (
                       <Clock className="w-3 h-3" /><span>ETA without traffic</span>
                     </div>
                     <span className="text-sm text-slate-600">
-                      {traffic.average_time_to_travel_mins > 0
-                        ? `${Math.round(traffic.average_time_to_travel_mins)} min`
-                        : '—'}
+                      {staticMins != null ? `${staticMins} min` : 'N/A'}
                     </span>
                   </div>
                 </div>
