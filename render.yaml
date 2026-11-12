@@ -47,7 +47,7 @@ services:
     name: smartroute-frontend
     runtime: static
     rootDir: Frontend
-    buildCommand: npm ci && npm run build
+    buildCommand: npm install && npm run build
     staticPublishPath: dist
 
     envVars:
