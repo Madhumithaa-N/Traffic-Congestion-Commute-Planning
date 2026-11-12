@@ -59,8 +59,9 @@ services:
         sync: false
 
   # ── 2. React / Vite Frontend (Static Site) ───────────────────────────────
-  - type: static
+  - type: web
     name: smartroute-frontend
+    runtime: static
 
     # Root directory containing package.json
     rootDir: Frontend
