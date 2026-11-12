@@ -20,7 +20,7 @@ import {
   CabService,
   TransitService,
 } from './data/mockRoutes';
-import { planCommute, CommutePlanResponse, DepartureOption } from './services/api';
+import { planCommute, CommutePlanResponse, DepartureOption, API_BASE } from './services/api';
 import { Car, Train, Sparkles, Map as MapIcon, Globe, AlertCircle, Clock } from 'lucide-react';
 
 const MAPS_API_KEY =
@@ -363,7 +363,7 @@ export default function App() {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       setStatusMessage({
         type: 'error',
-        text: `Could not reach the SmartRoute AI backend: ${msg}. Ensure the backend is running on port 8000.`,
+        text: `Could not reach the SmartRoute AI backend: ${msg}. Backend URL: ${API_BASE}`,
       });
     } finally {
       setIsPlanning(false);
