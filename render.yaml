@@ -47,7 +47,7 @@ services:
     name: smartroute-frontend
     runtime: static
     rootDir: Frontend
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --legacy-peer-deps && npm run build
     staticPublishPath: dist
 
     envVars:
