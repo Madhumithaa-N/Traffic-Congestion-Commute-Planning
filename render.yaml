@@ -62,7 +62,6 @@ services:
   - type: web
     name: smartroute-frontend
     runtime: static
-    plan: free
 
     # Root directory containing package.json
     rootDir: Frontend
