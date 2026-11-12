@@ -1,20 +1,16 @@
 # render.yaml – SmartRoute AI Render Blueprint
 #
-# Deploys two services from this repository:
+# Deploys two services:
 #   1. smartroute-backend  – Python FastAPI Web Service
 #   2. smartroute-frontend – React/Vite Static Site
 #
-# Usage:
-#   1. Push this file to the root of your GitHub repository.
-#   2. In Render Dashboard → New → Blueprint, connect the repo.
-#   3. Render will detect this file and create both services automatically.
-#   4. Set the secret environment variables in Render Dashboard after deploy.
-#
-# Secret environment variables (set manually in Render Dashboard – never commit):
-#   GOOGLE_MAPS_API_KEY  – backend service
-#   GEMINI_API_KEY       – backend service
-#   VITE_GOOGLE_MAPS_API_KEY  – frontend static site (build-time)
-#   VITE_API_BASE_URL         – frontend static site (build-time, set to backend URL)
+# HOW TO USE:
+#   1. Push this file to GitHub (already done).
+#   2. Render Dashboard → New → Blueprint → select this repo → Apply.
+#   3. After services are created, add the two secret keys in Dashboard:
+#        smartroute-backend  → Environment → GOOGLE_MAPS_API_KEY, GEMINI_API_KEY
+#        smartroute-frontend → Environment → VITE_GOOGLE_MAPS_API_KEY
+#      Then click "Save Changes" on each — Render rebuilds automatically.
 
 services:
 
@@ -25,34 +21,22 @@ services:
     region: oregon
     plan: free
 
-    # Build: install Python dependencies (run from repo root)
     buildCommand: pip install -r backend/requirements.txt
-
-    # Start: cd into backend/ so all relative imports work correctly,
-    # then launch uvicorn. $PORT is provided by Render at runtime.
-    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT --workers 2 --log-level info
-
-    # Health check endpoint
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --log-level info
     healthCheckPath: /health
 
-    # Runtime environment variables
-    # Non-secret values are set here; secrets are set in the Dashboard.
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.0"
-      - key: BACKEND_HOST
-        value: "0.0.0.0"
       - key: REQUEST_TIMEOUT
         value: "20"
       - key: TRAFFIC_CACHE_TTL
         value: "60"
       - key: GEMINI_MODEL
         value: "gemini-2.0-flash"
-      # CORS: allow Render frontend domain + localhost for dev.
-      # After deploying frontend, update this to your actual Render frontend URL.
       - key: CORS_ORIGINS
-        value: "https://smartroute-frontend.onrender.com,http://localhost:3000,http://localhost:5173"
-      # Secret env vars – set values in Render Dashboard, not here:
+        value: "*"
+      # Add these two in Render Dashboard → smartroute-backend → Environment:
       - key: GOOGLE_MAPS_API_KEY
         sync: false
       - key: GEMINI_API_KEY
@@ -62,23 +46,16 @@ services:
   - type: web
     name: smartroute-frontend
     runtime: static
-
-    # Root directory containing package.json
     rootDir: Frontend
-
-    # Build: install dependencies and run Vite production build
     buildCommand: npm ci && npm run build
-
-    # Serve from Vite's output directory
     staticPublishPath: dist
 
-    # Build-time environment variables.
-    # VITE_API_BASE_URL must be set to the backend's Render URL after backend is deployed.
     envVars:
       - key: NODE_VERSION
         value: "20.11.0"
-      # Secret / build-time env vars – set values in Render Dashboard:
-      - key: VITE_GOOGLE_MAPS_API_KEY
-        sync: false
+      # The backend URL is always predictable from the service name above.
       - key: VITE_API_BASE_URL
+        value: "https://smartroute-backend.onrender.com"
+      # Add this in Render Dashboard → smartroute-frontend → Environment:
+      - key: VITE_GOOGLE_MAPS_API_KEY
         sync: false

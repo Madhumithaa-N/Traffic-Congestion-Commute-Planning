@@ -6,9 +6,12 @@
  * Never call the backend directly from components.
  */
 
+// Priority: build-time env var → production Render URL → localhost dev fallback
 export const API_BASE =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
-  'http://localhost:8000';
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
+  (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
+    ? 'https://smartroute-backend.onrender.com'
+    : 'http://localhost:8000');
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
