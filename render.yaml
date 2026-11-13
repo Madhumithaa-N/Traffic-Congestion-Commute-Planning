@@ -1,20 +1,21 @@
 # render.yaml – SmartRoute AI Render Blueprint
 #
-# Deploys two services:
+# Deploys ONE service:
 #   1. smartroute-backend  – Python FastAPI Web Service
-#   2. smartroute-frontend – React/Vite Static Site
+#
+# The React/Vite frontend is deployed separately on Vercel.
+# Frontend URL: https://smartroute-ai.vercel.app  (update CORS_ORIGINS below after deploy)
 #
 # HOW TO USE:
-#   1. Push this file to GitHub (already done).
-#   2. Render Dashboard → New → Blueprint → select this repo → Apply.
-#   3. After services are created, add the two secret keys in Dashboard:
-#        smartroute-backend  → Environment → GOOGLE_MAPS_API_KEY, GEMINI_API_KEY
-#        smartroute-frontend → Environment → VITE_GOOGLE_MAPS_API_KEY
-#      Then click "Save Changes" on each — Render rebuilds automatically.
+#   1. Push this file to GitHub.
+#   2. Render Dashboard → smartroute-backend → Environment → add:
+#        GOOGLE_MAPS_API_KEY   your_key_here
+#        GEMINI_API_KEY        your_key_here
+#      Then click "Save Changes" — Render rebuilds automatically.
 
 services:
 
-  # ── 1. FastAPI Backend ────────────────────────────────────────────────────
+  # ── FastAPI Backend ───────────────────────────────────────────────────────
   - type: web
     name: smartroute-backend
     runtime: python
@@ -34,33 +35,11 @@ services:
         value: "60"
       - key: GEMINI_MODEL
         value: "gemini-2.0-flash"
+      # Update this to your actual Vercel frontend URL after first Vercel deploy
       - key: CORS_ORIGINS
-        value: "https://smartroute-frontend.onrender.com"
+        value: "https://smartroute-ai.vercel.app,http://localhost:5173,http://localhost:3000"
       # Add these two in Render Dashboard → smartroute-backend → Environment:
       - key: GOOGLE_MAPS_API_KEY
         sync: false
       - key: GEMINI_API_KEY
-        sync: false
-
-  # ── 2. React / Vite Frontend (Static Site) ───────────────────────────────
-  - type: web
-    name: smartroute-frontend
-    runtime: static
-    buildCommand: cd Frontend && npm install --legacy-peer-deps && npm run build
-    staticPublishPath: Frontend/dist
-
-    # SPA fallback: rewrite all paths to index.html so React Router works
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-
-    envVars:
-      - key: NODE_VERSION
-        value: "22.11.0"
-      # The backend URL is always predictable from the service name above.
-      - key: VITE_API_BASE_URL
-        value: "https://smartroute-backend.onrender.com"
-      # Add this in Render Dashboard → smartroute-frontend → Environment:
-      - key: VITE_GOOGLE_MAPS_API_KEY
         sync: false
