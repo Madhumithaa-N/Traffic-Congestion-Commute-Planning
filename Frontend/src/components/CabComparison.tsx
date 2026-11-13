@@ -1,17 +1,19 @@
 import React from 'react';
-import { Car, Clock, Flag, Info } from 'lucide-react';
+import { Car, Clock, Flag, Info, Zap } from 'lucide-react';
 import { CabService } from '../data/mockRoutes';
 
 interface CabComparisonProps {
   services: CabService[];
   onSelectService?: (service: CabService) => void;
   selectedServiceId?: string;
+  dataTimestamp?: string;   // e.g. "14:45:52"
 }
 
 export const CabComparison: React.FC<CabComparisonProps> = ({
   services,
   onSelectService,
   selectedServiceId,
+  dataTimestamp,
 }) => {
   return (
     <section className="mt-6">
@@ -20,13 +22,19 @@ export const CabComparison: React.FC<CabComparisonProps> = ({
         <div className="flex items-center gap-2.5">
           <Car className="w-5 h-5 text-blue-600 stroke-[2.2]" />
           <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-            Cab Fare & Departure Comparison
+            Cab Fare &amp; Departure Comparison
           </h2>
+          {dataTimestamp && (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+              <Zap className="w-3 h-3" />
+              Live · {dataTimestamp}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 text-slate-500 text-xs">
           <Info className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-          <span>Sample estimates only — live fares and ETAs vary by availability and traffic.</span>
+          <span>Fares &amp; ETAs from Departure Planner — vary by availability and traffic.</span>
         </div>
       </div>
 
