@@ -76,22 +76,36 @@ app = FastAPI(
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # CORS_ORIGINS is read from the environment (set in .env or Render Dashboard).
-# When not set, defaults to localhost dev ports.
-# In production on Render, set CORS_ORIGINS to your frontend's Render URL, e.g.:
-#   https://smartroute-frontend.onrender.com,http://localhost:3000
+# Production Vercel frontend: https://traffic-congestion-commute-planning.vercel.app
 #
-# If CORS_ORIGINS contains "*" as one of its values, open mode is used
-# (needed for Render free tier where the exact URL isn't known until after deploy).
+# If CORS_ORIGINS contains "*" as one of its values, or is empty, wildcard mode
+# is used. If specific origins are listed, the production Vercel URL is always
+# appended to ensure the deployed frontend can always reach the backend.
+# allow_credentials must be False when allow_origins includes "*".
 _cors_origins = [o.strip() for o in CORS_ORIGINS if o.strip()]
 _use_wildcard = not _cors_origins or "*" in _cors_origins
 
+# Known production frontend origins — always allowed regardless of env var
+_production_origins = [
+    "https://traffic-congestion-commute-planning.vercel.app",
+    "https://smartroute-frontend.onrender.com",
+]
+
+if _use_wildcard:
+    _final_origins: list[str] = ["*"]
+    _allow_credentials = False
+else:
+    _final_origins = list(set(_cors_origins + _production_origins))
+    _allow_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if _use_wildcard else _cors_origins,
-    allow_credentials=False,      # must be False when allow_origins includes "*"
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_final_origins,
+    allow_credentials=_allow_credentials,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "Origin"],
     expose_headers=["*"],
+    max_age=600,
 )
 
 # ── Singleton agent ───────────────────────────────────────────────────────────

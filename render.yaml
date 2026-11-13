@@ -36,9 +36,9 @@ services:
         value: "60"
       - key: GEMINI_MODEL
         value: "gemini-2.0-flash"
-      # Update this to your actual Vercel frontend URL after first Vercel deploy
+      # Vercel frontend origin — confirmed URL
       - key: CORS_ORIGINS
-        value: "https://smartroute-ai.vercel.app,http://localhost:5173,http://localhost:3000"
+        value: "https://traffic-congestion-commute-planning.vercel.app,http://localhost:5173,http://localhost:3000"
       # Add these two in Render Dashboard → smartroute-backend → Environment:
       - key: GOOGLE_MAPS_API_KEY
         sync: false

@@ -6,12 +6,15 @@
  * Never call the backend directly from components.
  */
 
-// Priority: build-time env var → localhost dev fallback
-// VITE_API_BASE_URL MUST be set in Vercel/Render environment dashboard for production.
-// There is no hardcoded production URL here — the env var is the single source of truth.
+// Priority: build-time env var → production hostname check → localhost dev fallback
+// For production: set VITE_API_BASE_URL=https://smartroute-backend-m5nh.onrender.com
+// in Vercel project environment variables (Settings → Environment Variables).
+// The runtime fallback ensures the app works even if the env var is not set in Vercel.
 export const API_BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
-  'http://localhost:8000';
+  (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
+    ? 'https://smartroute-backend-m5nh.onrender.com'
+    : 'http://localhost:8000');
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
