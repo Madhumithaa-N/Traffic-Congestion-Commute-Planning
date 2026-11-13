@@ -567,10 +567,13 @@ def main():
     print("=" * 60)
 
     # ── Step 1: Load data ──────────────────────────────────────────────────
-    # Change the path below if your CSV is in a different location.
-    CSV_PATH = r"C:\Users\Dhanya\Downloads\road_traffic_4354_records.csv"
+    # Resolution order:
+    #   1. CLI argument:               python prediction.py /path/to/data.csv
+    #   2. Environment variable:       CSV_PATH=... python prediction.py
+    #   3. Relative default (bundled): backend/ml_model/road_traffic_4354_records.csv
+    _default_csv = os.path.join(os.path.dirname(__file__), "road_traffic_4354_records.csv")
+    CSV_PATH = os.environ.get("CSV_PATH", _default_csv)
 
-    # Allow overriding from the command line:  python prediction.py my_data.csv
     if len(sys.argv) > 1:
         CSV_PATH = sys.argv[1]
 

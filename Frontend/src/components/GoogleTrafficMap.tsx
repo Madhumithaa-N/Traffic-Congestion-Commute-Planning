@@ -106,9 +106,7 @@ export const GoogleTrafficMap: React.FC<GoogleTrafficMapProps> = ({
   startLabel,
   destLabel,
 }) => {
-  const apiKey =
-    import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
-    'AIzaSyAK3wjRv93etPhuedjL6EpwsYqGbbc9OYo';
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? '';
 
   const [showTraffic, setShowTraffic] = useState(true);
   const [showTransit, setShowTransit] = useState(true);

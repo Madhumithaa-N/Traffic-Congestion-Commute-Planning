@@ -1,4 +1,4 @@
-node_modules/
+﻿node_modules/
 build/
 dist/
 coverage/
@@ -6,5 +6,12 @@ coverage/
 *.log
 .env*
 !.env.example
+!**/.env.example
+
+# Python artefacts – compiled bytecode only; keep data/model files tracked
+__pycache__/
+*.py[cod]
+confusion_matrix.png
+feature_importance.png
 
 .gmp_cache/

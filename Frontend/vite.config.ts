@@ -4,11 +4,16 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  // `import.meta.dirname` is preferred; fall back to __dirname for older Node
+  const root = typeof import.meta.dirname !== 'undefined'
+    ? import.meta.dirname
+    : path.dirname(new URL(import.meta.url).pathname);
+
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': root,
       },
     },
     server: {
@@ -18,5 +23,7 @@ export default defineConfig(() => {
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
+    // SPA fallback: serve index.html for all unknown routes (required for React Router / client-side routing on Render Static Sites)
+    appType: 'spa' as const,
   };
 });
