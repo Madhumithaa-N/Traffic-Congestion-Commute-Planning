@@ -4,7 +4,8 @@
 #   1. smartroute-backend  – Python FastAPI Web Service
 #
 # The React/Vite frontend is deployed separately on Vercel.
-# Frontend URL: https://smartroute-ai.vercel.app  (update CORS_ORIGINS below after deploy)
+# Backend URL: https://smartroute-backend-m5nh.onrender.com
+# Frontend URL: update CORS_ORIGINS below once Vercel URL is known
 #
 # HOW TO USE:
 #   1. Push this file to GitHub.
